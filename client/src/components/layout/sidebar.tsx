@@ -43,7 +43,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       
       <aside 
         className={cn(
-          "w-64 bg-card shadow-lg border-r border-gray-200 fixed lg:relative z-30 transition-transform duration-300 h-full",
+          "w-64 bg-card shadow-lg border-r border-gray-200 fixed lg:relative z-30 transition-transform duration-300 h-full flex flex-col",
           "lg:translate-x-0 lg:block",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )} 
@@ -68,7 +68,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           </button>
         </div>
         
-        <nav className="mt-6">
+        <nav className="mt-6 flex-1 pb-20">
           <ul className="space-y-1 px-4">
             {navigation.map((item) => {
               const Icon = item.icon;
