@@ -103,6 +103,10 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const newProperty: Property = {
       ...property,
+      description: property.description ?? null,
+      maxGuests: property.maxGuests ?? 1,
+      amenities: property.amenities ?? null,
+      photos: property.photos ?? null,
       id,
       createdAt: new Date(),
     };
@@ -140,6 +144,8 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const newGuest: Guest = {
       ...guest,
+      document: guest.document ?? null,
+      notes: guest.notes ?? null,
       id,
       createdAt: new Date(),
     };
@@ -215,6 +221,8 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const newBooking: Booking = {
       ...booking,
+      status: booking.status ?? "confirmed",
+      notes: booking.notes ?? null,
       id,
       createdAt: new Date(),
     };
@@ -252,6 +260,13 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const newTask: MaintenanceTask = {
       ...task,
+      status: task.status ?? "pending",
+      description: task.description ?? null,
+      notes: task.notes ?? null,
+      scheduledDate: task.scheduledDate ?? null,
+      completedDate: task.completedDate ?? null,
+      assignedTo: task.assignedTo ?? null,
+      cost: task.cost ?? null,
       id,
       createdAt: new Date(),
     };
@@ -296,6 +311,7 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const newExpense: Expense = {
       ...expense,
+      receipt: expense.receipt ?? null,
       id,
       createdAt: new Date(),
     };
@@ -337,6 +353,11 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const newMessage: Message = {
       ...message,
+      guestId: message.guestId ?? null,
+      bookingId: message.bookingId ?? null,
+      subject: message.subject ?? null,
+      type: message.type ?? "general",
+      isRead: message.isRead ?? false,
       id,
       sentAt: new Date(),
     };
