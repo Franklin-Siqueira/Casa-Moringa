@@ -98,6 +98,10 @@ export const insertPropertySchema = createInsertSchema(properties).omit({
 export const insertGuestSchema = createInsertSchema(guests).omit({
   id: true,
   createdAt: true,
+}).extend({
+  phone: z.string().min(1, "WhatsApp é obrigatório").transform(val => val.replace(/\D/g, '')).refine(val => val.length >= 10 && val.length <= 11, "Telefone deve ter 10 ou 11 dígitos"),
+  cpf: z.string().optional().transform(val => val ? val.replace(/\D/g, '') : val).refine(val => !val || val.length === 11, "CPF deve ter 11 dígitos"),
+  zipCode: z.string().optional().transform(val => val ? val.replace(/\D/g, '') : val).refine(val => !val || val.length === 8, "CEP deve ter 8 dígitos"),
 });
 
 export const insertBookingSchema = createInsertSchema(bookings).omit({

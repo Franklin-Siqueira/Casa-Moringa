@@ -17,17 +17,8 @@ import { useToast } from "@/hooks/use-toast";
 import type { Guest } from "@shared/schema";
 import { insertGuestSchema } from "@shared/schema";
 
-const guestSchema = insertGuestSchema.extend({
-  cpf: z.string().optional().transform(val => val ? val.replace(/\D/g, '') : val).refine(val => !val || val.length === 11, "CPF deve ter 11 dígitos"),
-  street: z.string().optional(),
-  number: z.string().optional(),
-  complement: z.string().optional(),
-  city: z.string().optional(),
-  state: z.string().optional(),
-  zipCode: z.string().optional().transform(val => val ? val.replace(/\D/g, '') : val).refine(val => !val || val.length === 8, "CEP deve ter 8 dígitos"),
-  notes: z.string().optional(),
-  phone: z.string().min(1, "WhatsApp é obrigatório").transform(val => val.replace(/\D/g, '')).refine(val => val.length >= 10 && val.length <= 11, "Telefone deve ter 10 ou 11 dígitos"),
-});
+// Use the schema from shared with additional client-side extensions for optional fields
+const guestSchema = insertGuestSchema;
 
 type GuestFormData = z.infer<typeof guestSchema>;
 
@@ -175,12 +166,20 @@ export default function Guests() {
 
   const formatCPF = (cpf: string) => {
     if (!cpf) return '';
-    return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    const digits = cpf.replace(/\D/g, '');
+    return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
   };
 
   const formatPhone = (phone: string) => {
     if (!phone) return '';
-    return phone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+    const digits = phone.replace(/\D/g, '');
+    return digits.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+  };
+
+  const formatZipCode = (zipCode: string) => {
+    if (!zipCode) return '';
+    const digits = zipCode.replace(/\D/g, '');
+    return digits.replace(/(\d{5})(\d{3})/, '$1-$2');
   };
 
   if (isLoading) {
@@ -395,12 +394,8 @@ export default function Guests() {
                             data-testid="input-guest-cpf"
                             maxLength={14}
                             onChange={(e) => {
-                              let value = e.target.value.replace(/\D/g, '');
-                              let formatted = value;
-                              if (value.length <= 11) {
-                                formatted = value.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-                              }
-                              e.target.value = formatted;
+                              const rawValue = e.target.value.replace(/\D/g, '');
+                              const formatted = formatCPF(rawValue);
                               field.onChange(formatted);
                             }}
                           />
@@ -423,12 +418,8 @@ export default function Guests() {
                             data-testid="input-guest-phone"
                             maxLength={15}
                             onChange={(e) => {
-                              let value = e.target.value.replace(/\D/g, '');
-                              let formatted = value;
-                              if (value.length <= 11) {
-                                formatted = value.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
-                              }
-                              e.target.value = formatted;
+                              const rawValue = e.target.value.replace(/\D/g, '');
+                              const formatted = formatPhone(rawValue);
                               field.onChange(formatted);
                             }}
                           />
@@ -583,12 +574,8 @@ export default function Guests() {
                             data-testid="input-guest-zipcode"
                             maxLength={9}
                             onChange={(e) => {
-                              let value = e.target.value.replace(/\D/g, '');
-                              let formatted = value;
-                              if (value.length <= 8) {
-                                formatted = value.replace(/(\d{5})(\d{3})/, '$1-$2');
-                              }
-                              e.target.value = formatted;
+                              const rawValue = e.target.value.replace(/\D/g, '');
+                              const formatted = formatZipCode(rawValue);
                               field.onChange(formatted);
                             }}
                           />
