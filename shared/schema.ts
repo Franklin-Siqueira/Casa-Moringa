@@ -18,9 +18,17 @@ export const properties = pgTable("properties", {
 export const guests = pgTable("guests", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
+  lastName: text("last_name").notNull(),
   email: text("email").notNull().unique(),
-  phone: text("phone").notNull(),
-  document: text("document"),
+  phone: text("phone").notNull(), // WhatsApp number
+  cpf: text("cpf"),
+  street: text("street"), // rua/avenida/praça
+  number: text("number"), // número do endereço
+  complement: text("complement"), // complemento
+  city: text("city"),
+  state: text("state"),
+  zipCode: text("zip_code"),
+  document: text("document"), // outros documentos
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
 });
