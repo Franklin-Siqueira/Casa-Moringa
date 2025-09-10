@@ -8,6 +8,33 @@ RentManager is a comprehensive property management application designed for rent
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+### September 2025 - Guest Module Expansion
+- **Enhanced Guest Schema**: Expanded guest entity to include comprehensive personal information:
+  - Full name support (firstName + lastName)
+  - Brazilian document support (CPF with validation)
+  - Complete address structure (street, number, complement, city, state, ZIP code)
+  - WhatsApp contact integration
+  - Additional notes field for guest-specific information
+  
+- **Advanced Form Handling**: Implemented sophisticated guest management interface:
+  - Modal-based add/edit forms with organized sections (Personal Data, Address, Notes)
+  - Automatic input formatting for CPF (000.000.000-00), phone ((11) 99999-9999), and ZIP code (00000-000)
+  - Real-time validation with Zod schema integration
+  - Brazilian state dropdown with all 27 states and federal district
+  
+- **Backend Validation**: Robust server-side data processing:
+  - Input normalization (strips formatting, stores digits-only)
+  - Length validation (CPF: 11 digits, phone: 10-11 digits, ZIP: 8 digits)
+  - Consistent validation between frontend and backend using shared schemas
+  
+- **Enhanced Search & Display**: Improved guest management experience:
+  - Extended search functionality including CPF lookup
+  - Responsive table layout showing formatted contact info, documents, and address
+  - Visual indicators for missing information (address, CPF)
+  - Professional contact display with email and WhatsApp differentiation
+
 ## System Architecture
 
 ### Frontend Architecture
@@ -28,13 +55,13 @@ Preferred communication style: Simple, everyday language.
 - **Request Logging**: Custom middleware for API request logging
 
 ### Database Schema
-The application uses five main entities:
+The application uses six main entities:
 - **Properties**: Rental property information including name, address, amenities, and pricing
-- **Guests**: Guest contact information and booking history
+- **Guests**: Comprehensive guest management with personal details (name, surname), contact information (WhatsApp, email), identification (CPF), and complete address (street, number, complement, city, state, ZIP code)
 - **Bookings**: Reservation details linking properties and guests with dates and status
 - **Maintenance Tasks**: Property maintenance scheduling and tracking
 - **Expenses**: Financial tracking for property-related costs
-- **Messages**: Communication management for guest correspondence
+- **Messages**: Communication management for guest correspondence including WhatsApp Business API integration
 
 ### Component Organization
 - **Layout Components**: Main layout with sidebar navigation and top bar
