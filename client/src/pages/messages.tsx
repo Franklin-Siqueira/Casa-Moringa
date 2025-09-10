@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
-import { MessageSquare, Search, Filter, Plus, Send, Mail, Eye, Trash2, User, Clock } from "lucide-react";
+import { MessageSquare, Search, Filter, Plus, Send, Mail, Eye, Trash2, User, Clock, MessageCircle, Smartphone, Settings } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -20,12 +20,22 @@ import type { Message, Guest, BookingWithGuest } from "@shared/schema";
 const messageSchema = z.object({
   guestId: z.string().optional(),
   bookingId: z.string().optional(),
-  subject: z.string().min(1, "Assunto é obrigatório"),
+  subject: z.string().optional(),
   content: z.string().min(1, "Conteúdo é obrigatório"),
   type: z.enum(["general", "check_in_instructions", "reminder", "complaint"]).default("general"),
+  channel: z.enum(["internal", "whatsapp", "email", "sms"]).default("internal"),
+  toNumber: z.string().optional(),
+});
+
+const whatsappMessageSchema = z.object({
+  to: z.string().min(1, "Número do WhatsApp é obrigatório"),
+  message: z.string().min(1, "Mensagem é obrigatória"),
+  guestId: z.string().optional(),
+  bookingId: z.string().optional(),
 });
 
 type MessageFormData = z.infer<typeof messageSchema>;
+type WhatsAppMessageData = z.infer<typeof whatsappMessageSchema>;
 
 interface MessageWithRelations extends Message {
   guest?: Guest;
@@ -36,7 +46,10 @@ export default function Messages() {
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [channelFilter, setChannelFilter] = useState("all");
   const [isNewMessageOpen, setIsNewMessageOpen] = useState(false);
+  const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
+  const [isWhatsAppConfigOpen, setIsWhatsAppConfigOpen] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState<MessageWithRelations | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -53,6 +66,10 @@ export default function Messages() {
     queryKey: ["/api/bookings"],
   });
 
+  const { data: whatsappStatus } = useQuery<{configured: boolean; profile?: any}>({
+    queryKey: ["/api/whatsapp/status"],
+  });
+
   const form = useForm<MessageFormData>({
     resolver: zodResolver(messageSchema),
     defaultValues: {
@@ -61,6 +78,18 @@ export default function Messages() {
       subject: "",
       content: "",
       type: "general",
+      channel: "internal",
+      toNumber: "",
+    },
+  });
+
+  const whatsappForm = useForm<WhatsAppMessageData>({
+    resolver: zodResolver(whatsappMessageSchema),
+    defaultValues: {
+      to: "",
+      message: "",
+      guestId: "",
+      bookingId: "",
     },
   });
 
@@ -116,6 +145,51 @@ export default function Messages() {
     },
   });
 
+  const sendWhatsAppMutation = useMutation({
+    mutationFn: async (data: WhatsAppMessageData) => {
+      const response = await apiRequest("POST", "/api/whatsapp/send", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/messages"] });
+      toast({
+        title: "Sucesso",
+        description: "Mensagem WhatsApp enviada com sucesso!",
+      });
+      whatsappForm.reset();
+      setIsWhatsAppModalOpen(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro",
+        description: error.message || "Falha ao enviar mensagem WhatsApp. Tente novamente.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const configureWhatsAppMutation = useMutation({
+    mutationFn: async (config: any) => {
+      const response = await apiRequest("POST", "/api/whatsapp/config", config);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/status"] });
+      toast({
+        title: "Sucesso",
+        description: "WhatsApp configurado com sucesso!",
+      });
+      setIsWhatsAppConfigOpen(false);
+    },
+    onError: () => {
+      toast({
+        title: "Erro",
+        description: "Falha ao configurar WhatsApp. Verifique os dados.",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Enrich messages with guest and booking data
   const enrichedMessages: MessageWithRelations[] = messages?.map(message => {
     const guest = message.guestId ? guests?.find(g => g.id === message.guestId) : undefined;
@@ -132,7 +206,8 @@ export default function Messages() {
     const matchesStatus = statusFilter === "all" || 
                          (statusFilter === "read" && message.isRead) ||
                          (statusFilter === "unread" && !message.isRead);
-    return matchesSearch && matchesType && matchesStatus;
+    const matchesChannel = channelFilter === "all" || (message as any).channel === channelFilter;
+    return matchesSearch && matchesType && matchesStatus && matchesChannel;
   });
 
   const getTypeBadge = (type: string) => {
@@ -144,6 +219,30 @@ export default function Messages() {
     };
     const typeInfo = types[type as keyof typeof types] || types.general;
     return <Badge className={typeInfo.className}>{typeInfo.label}</Badge>;
+  };
+
+  const getChannelIcon = (channel: string) => {
+    switch (channel) {
+      case "whatsapp":
+        return <MessageCircle className="w-4 h-4 text-green-600" />;
+      case "email":
+        return <Mail className="w-4 h-4 text-blue-600" />;
+      case "sms":
+        return <Smartphone className="w-4 h-4 text-purple-600" />;
+      default:
+        return <MessageSquare className="w-4 h-4 text-gray-600" />;
+    }
+  };
+
+  const getChannelBadge = (channel: string) => {
+    const channels = {
+      internal: { label: "Interno", className: "bg-gray-100 text-gray-700" },
+      whatsapp: { label: "WhatsApp", className: "bg-green-100 text-green-700" },
+      email: { label: "Email", className: "bg-blue-100 text-blue-700" },
+      sms: { label: "SMS", className: "bg-purple-100 text-purple-700" }
+    };
+    const channelInfo = channels[channel as keyof typeof channels] || channels.internal;
+    return <Badge className={channelInfo.className}>{channelInfo.label}</Badge>;
   };
 
   const handleViewMessage = (message: MessageWithRelations) => {
@@ -189,10 +288,28 @@ export default function Messages() {
                   </Badge>
                 )}
               </CardTitle>
-              <Button onClick={() => setIsNewMessageOpen(true)} data-testid="button-new-message">
-                <Plus className="w-4 h-4 mr-2" />
-                Nova Mensagem
-              </Button>
+              <div className="flex items-center space-x-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsWhatsAppConfigOpen(true)}
+                  data-testid="button-whatsapp-config"
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  Configurar WhatsApp
+                </Button>
+                <Button 
+                  onClick={() => setIsWhatsAppModalOpen(true)} 
+                  disabled={!whatsappStatus?.configured}
+                  data-testid="button-whatsapp-message"
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  WhatsApp
+                </Button>
+                <Button onClick={() => setIsNewMessageOpen(true)} data-testid="button-new-message">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Nova Mensagem
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -232,6 +349,18 @@ export default function Messages() {
                     <SelectItem value="read">Lidas</SelectItem>
                   </SelectContent>
                 </Select>
+                <Select value={channelFilter} onValueChange={setChannelFilter}>
+                  <SelectTrigger className="w-[120px]" data-testid="select-channel-filter">
+                    <SelectValue placeholder="Canal" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="internal">Interno</SelectItem>
+                    <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                    <SelectItem value="email">Email</SelectItem>
+                    <SelectItem value="sms">SMS</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -251,6 +380,7 @@ export default function Messages() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Status</TableHead>
+                    <TableHead>Canal</TableHead>
                     <TableHead>Hóspede</TableHead>
                     <TableHead>Assunto</TableHead>
                     <TableHead>Tipo</TableHead>
@@ -271,6 +401,12 @@ export default function Messages() {
                             <div className="w-2 h-2 bg-danger rounded-full"></div>
                           )}
                           <Mail className={`w-4 h-4 ${message.isRead ? 'text-gray-400' : 'text-primary'}`} />
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center space-x-2">
+                          {getChannelIcon((message as any).channel || 'internal')}
+                          {getChannelBadge((message as any).channel || 'internal')}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -346,7 +482,7 @@ export default function Messages() {
           
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField
                   control={form.control}
                   name="guestId"
@@ -395,6 +531,28 @@ export default function Messages() {
                     </FormItem>
                   )}
                 />
+
+                <FormField
+                  control={form.control}
+                  name="channel"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Canal *</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-message-channel">
+                            <SelectValue placeholder="Canal da mensagem" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="internal">Interno</SelectItem>
+                          <SelectItem value="email">Email</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
 
               <FormField
@@ -427,7 +585,7 @@ export default function Messages() {
                 name="subject"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Assunto *</FormLabel>
+                    <FormLabel>Assunto</FormLabel>
                     <FormControl>
                       <Input placeholder="Assunto da mensagem" {...field} data-testid="input-message-subject" />
                     </FormControl>
@@ -522,6 +680,205 @@ export default function Messages() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* WhatsApp Message Modal */}
+      <Dialog open={isWhatsAppModalOpen} onOpenChange={() => setIsWhatsAppModalOpen(false)}>
+        <DialogContent className="max-w-2xl" data-testid="whatsapp-message-modal">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2">
+              <MessageCircle className="w-5 h-5 text-green-600" />
+              <span>Enviar WhatsApp</span>
+            </DialogTitle>
+          </DialogHeader>
+          
+          <Form {...whatsappForm}>
+            <form onSubmit={whatsappForm.handleSubmit((data) => sendWhatsAppMutation.mutate(data))} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={whatsappForm.control}
+                  name="guestId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Hóspede</FormLabel>
+                      <Select onValueChange={(value) => {
+                        field.onChange(value);
+                        const guest = guests?.find(g => g.id === value);
+                        if (guest) {
+                          whatsappForm.setValue("to", guest.phone);
+                        }
+                      }} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-whatsapp-guest">
+                            <SelectValue placeholder="Selecionar hóspede" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {guests?.map((guest) => (
+                            <SelectItem key={guest.id} value={guest.id}>
+                              {guest.name} ({guest.phone})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={whatsappForm.control}
+                  name="to"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Número WhatsApp *</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="Ex: 5511999999999" 
+                          {...field} 
+                          data-testid="input-whatsapp-number"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={whatsappForm.control}
+                name="message"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Mensagem *</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        rows={6} 
+                        placeholder="Digite sua mensagem WhatsApp aqui..." 
+                        {...field} 
+                        data-testid="textarea-whatsapp-message"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setIsWhatsAppModalOpen(false)}
+                  data-testid="button-cancel-whatsapp"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={sendWhatsAppMutation.isPending}
+                  data-testid="button-send-whatsapp"
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  {sendWhatsAppMutation.isPending ? "Enviando..." : "Enviar WhatsApp"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* WhatsApp Config Modal */}
+      <Dialog open={isWhatsAppConfigOpen} onOpenChange={() => setIsWhatsAppConfigOpen(false)}>
+        <DialogContent className="max-w-2xl" data-testid="whatsapp-config-modal">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2">
+              <Settings className="w-5 h-5" />
+              <span>Configurar WhatsApp Business API</span>
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <h4 className="font-medium text-blue-900 mb-2">Informações necessárias:</h4>
+              <ul className="text-sm text-blue-800 space-y-1">
+                <li>• Access Token do WhatsApp Business API</li>
+                <li>• Phone Number ID da conta business</li>
+                <li>• Verify Token para webhook</li>
+                <li>• URL do webhook configurada no Meta Business</li>
+              </ul>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target as HTMLFormElement);
+              configureWhatsAppMutation.mutate({
+                accessToken: formData.get('accessToken'),
+                phoneNumberId: formData.get('phoneNumberId'),
+                verifyToken: formData.get('verifyToken'),
+                webhookUrl: formData.get('webhookUrl'),
+              });
+            }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Access Token *</label>
+                <Input 
+                  name="accessToken" 
+                  type="password"
+                  placeholder="Seu WhatsApp Business API Access Token"
+                  required
+                  data-testid="input-access-token"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-2">Phone Number ID *</label>
+                <Input 
+                  name="phoneNumberId"
+                  placeholder="ID do número de telefone business"
+                  required
+                  data-testid="input-phone-number-id"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-2">Verify Token *</label>
+                <Input 
+                  name="verifyToken"
+                  placeholder="Token de verificação do webhook"
+                  required
+                  data-testid="input-verify-token"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-2">Webhook URL</label>
+                <Input 
+                  name="webhookUrl"
+                  placeholder="https://seu-dominio.com/api/whatsapp/webhook"
+                  data-testid="input-webhook-url"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setIsWhatsAppConfigOpen(false)}
+                  data-testid="button-cancel-config"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={configureWhatsAppMutation.isPending}
+                  data-testid="button-save-config"
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  {configureWhatsAppMutation.isPending ? "Salvando..." : "Salvar Configuração"}
+                </Button>
+              </div>
+            </form>
+          </div>
         </DialogContent>
       </Dialog>
     </>

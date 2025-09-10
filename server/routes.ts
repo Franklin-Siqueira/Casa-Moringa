@@ -6,6 +6,31 @@ import {
   insertPropertySchema, insertGuestSchema, insertBookingSchema,
   insertMaintenanceTaskSchema, insertExpenseSchema, insertMessageSchema
 } from "@shared/schema";
+import { z } from "zod";
+
+// WhatsApp validation schemas
+const whatsappConfigSchema = z.object({
+  accessToken: z.string().min(1, "Access token é obrigatório"),
+  phoneNumberId: z.string().min(1, "Phone Number ID é obrigatório"),
+  verifyToken: z.string().min(1, "Verify token é obrigatório"),
+  webhookUrl: z.string().url().optional(),
+});
+
+const whatsappSendSchema = z.object({
+  to: z.string().min(1, "Número destinatário é obrigatório"),
+  message: z.string().min(1, "Mensagem é obrigatória"),
+  guestId: z.string().optional(),
+  bookingId: z.string().optional(),
+});
+
+const whatsappTemplateSchema = z.object({
+  to: z.string().min(1, "Número destinatário é obrigatório"),
+  templateName: z.string().min(1, "Nome do template é obrigatório"),
+  languageCode: z.string().optional(),
+  parameters: z.array(z.string()).optional(),
+  guestId: z.string().optional(),
+  bookingId: z.string().optional(),
+});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
@@ -366,21 +391,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/whatsapp/config", async (req, res) => {
     try {
-      const { accessToken, phoneNumberId, verifyToken, webhookUrl } = req.body;
-      
-      if (!accessToken || !phoneNumberId || !verifyToken) {
-        return res.status(400).json({ message: "Missing required WhatsApp configuration" });
-      }
+      const configData = whatsappConfigSchema.parse(req.body);
 
-      whatsappService.setConfig({
-        accessToken,
-        phoneNumberId,
-        verifyToken,
-        webhookUrl
-      });
+      whatsappService.setConfig(configData);
 
       res.json({ message: "WhatsApp configured successfully" });
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid configuration data",
+          errors: error.errors
+        });
+      }
       res.status(500).json({ message: "Failed to configure WhatsApp" });
     }
   });
@@ -388,19 +410,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/whatsapp/status", async (req, res) => {
     try {
       const isConfigured = whatsappService.isConfigured();
-      let profile = null;
+      let profileSummary = null;
       
       if (isConfigured) {
         try {
-          profile = await whatsappService.getBusinessProfile();
+          const profile = await whatsappService.getBusinessProfile();
+          // Only return safe profile info, no sensitive data
+          profileSummary = {
+            name: profile.name,
+            status: profile.status,
+            messaging_product: profile.messaging_product
+          };
         } catch (error) {
-          console.error('Failed to get business profile:', error);
+          console.error('Failed to get business profile:', error instanceof Error ? error.message : 'Unknown error');
         }
       }
 
       res.json({
         configured: isConfigured,
-        profile
+        profile: profileSummary
       });
     } catch (error) {
       res.status(500).json({ message: "Failed to get WhatsApp status" });
@@ -409,53 +437,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/whatsapp/send", async (req, res) => {
     try {
-      const { to, message, guestId, bookingId } = req.body;
-      
-      if (!to || !message) {
-        return res.status(400).json({ message: "Missing required fields: to, message" });
-      }
+      const sendData = whatsappSendSchema.parse(req.body);
 
       if (!whatsappService.isConfigured()) {
         return res.status(400).json({ message: "WhatsApp not configured" });
       }
 
-      const result = await whatsappService.sendTextMessage(to, message, guestId, bookingId);
-      res.json(result);
+      const result = await whatsappService.sendTextMessage(
+        sendData.to, 
+        sendData.message, 
+        sendData.guestId, 
+        sendData.bookingId
+      );
+      
+      // Only return safe data, no sensitive tokens
+      res.json({ 
+        success: true,
+        messageId: result.messages?.[0]?.id,
+        status: 'sent'
+      });
     } catch (error: any) {
-      console.error('WhatsApp send error:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid send data",
+          errors: error.errors
+        });
+      }
+      
+      console.error('WhatsApp send error:', error instanceof Error ? error.message : 'Unknown error');
       res.status(500).json({ 
-        message: "Failed to send WhatsApp message",
-        error: error.message 
+        message: error.message || "Failed to send WhatsApp message"
       });
     }
   });
 
   app.post("/api/whatsapp/send-template", async (req, res) => {
     try {
-      const { to, templateName, languageCode, parameters, guestId, bookingId } = req.body;
-      
-      if (!to || !templateName) {
-        return res.status(400).json({ message: "Missing required fields: to, templateName" });
-      }
+      const templateData = whatsappTemplateSchema.parse(req.body);
 
       if (!whatsappService.isConfigured()) {
         return res.status(400).json({ message: "WhatsApp not configured" });
       }
 
       const result = await whatsappService.sendTemplateMessage(
-        to, 
-        templateName, 
-        languageCode || 'pt_BR', 
-        parameters, 
-        guestId, 
-        bookingId
+        templateData.to, 
+        templateData.templateName, 
+        templateData.languageCode || 'pt_BR', 
+        templateData.parameters, 
+        templateData.guestId, 
+        templateData.bookingId
       );
-      res.json(result);
+      
+      // Only return safe data
+      res.json({ 
+        success: true,
+        messageId: result.messages?.[0]?.id,
+        status: 'sent'
+      });
     } catch (error: any) {
-      console.error('WhatsApp template send error:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid template data",
+          errors: error.errors
+        });
+      }
+      
+      console.error('WhatsApp template send error:', error instanceof Error ? error.message : 'Unknown error');
       res.status(500).json({ 
-        message: "Failed to send WhatsApp template",
-        error: error.message 
+        message: error.message || "Failed to send WhatsApp template"
       });
     }
   });

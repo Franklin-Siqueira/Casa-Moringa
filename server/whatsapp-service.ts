@@ -6,7 +6,7 @@ export interface WhatsAppConfig {
   accessToken: string;
   phoneNumberId: string;
   verifyToken: string;
-  webhookUrl: string;
+  webhookUrl?: string;
 }
 
 export class WhatsAppService {
@@ -34,6 +34,7 @@ export class WhatsAppService {
     const data = {
       messaging_product: 'whatsapp',
       to: to,
+      type: 'text',
       text: { body: message }
     };
 
@@ -64,8 +65,8 @@ export class WhatsAppService {
 
       return response.data;
     } catch (error: any) {
-      console.error('Error sending WhatsApp message:', error.response?.data || error.message);
-      throw error;
+      console.error('Error sending WhatsApp message:', error.message || 'Unknown error');
+      throw new Error(error.response?.data?.error?.message || error.message || 'Failed to send WhatsApp message');
     }
   }
 
@@ -124,19 +125,32 @@ export class WhatsAppService {
 
       return response.data;
     } catch (error: any) {
-      console.error('Error sending WhatsApp template:', error.response?.data || error.message);
-      throw error;
+      console.error('Error sending WhatsApp template:', error.message || 'Unknown error');
+      throw new Error(error.response?.data?.error?.message || error.message || 'Failed to send WhatsApp template');
     }
   }
 
   async processIncomingMessage(messageData: any): Promise<void> {
     try {
+      if (!messageData.messages || messageData.messages.length === 0) {
+        console.log('No messages in webhook data');
+        return;
+      }
+
       const message = messageData.messages[0];
-      const contact = messageData.contacts[0];
+      const contact = messageData.contacts?.[0];
+      
+      if (!contact) {
+        console.log('No contact information in webhook data');
+        return;
+      }
+      
+      // Normalizar número de telefone para E.164
+      const normalizedPhone = this.normalizePhoneNumber(contact.wa_id);
       
       // Procurar hóspede pelo telefone
       const guests = await storage.getGuests();
-      const guest = guests.find(g => g.phone === contact.wa_id);
+      const guest = guests.find(g => this.normalizePhoneNumber(g.phone) === normalizedPhone);
 
       const messageContent = message.text ? message.text.body : 
                            message.image ? '[Imagem]' :
@@ -162,17 +176,27 @@ export class WhatsAppService {
       
       console.log('WhatsApp message processed:', message.id);
     } catch (error) {
-      console.error('Error processing incoming WhatsApp message:', error);
+      console.error('Error processing incoming WhatsApp message:', error instanceof Error ? error.message : 'Unknown error');
     }
   }
 
   async processStatusUpdate(statusData: any): Promise<void> {
     try {
+      if (!statusData.statuses || statusData.statuses.length === 0) {
+        console.log('No status updates in webhook data');
+        return;
+      }
+      
       const status = statusData.statuses[0];
-      await storage.updateWhatsAppMessageStatus(status.id, status.status);
-      console.log('WhatsApp status updated:', status.id, status.status);
+      const existingMessage = await storage.updateWhatsAppMessageStatus(status.id, status.status);
+      
+      if (existingMessage) {
+        console.log('WhatsApp status updated:', status.id, status.status);
+      } else {
+        console.log('Message not found for status update:', status.id);
+      }
     } catch (error) {
-      console.error('Error processing WhatsApp status update:', error);
+      console.error('Error processing WhatsApp status update:', error instanceof Error ? error.message : 'Unknown error');
     }
   }
 
@@ -185,12 +209,28 @@ export class WhatsAppService {
     return null;
   }
 
+  private normalizePhoneNumber(phone: string): string {
+    // Remove todos os caracteres não numéricos
+    const cleaned = phone.replace(/\D/g, '');
+    
+    // Se não começar com código do país, assumir Brasil (+55)
+    if (cleaned.length === 11 && cleaned.startsWith('11')) {
+      return `55${cleaned}`;
+    } else if (cleaned.length === 10) {
+      return `5511${cleaned}`;
+    } else if (cleaned.length === 13 && cleaned.startsWith('55')) {
+      return cleaned;
+    }
+    
+    return cleaned;
+  }
+
   async getBusinessProfile(): Promise<any> {
     if (!this.isConfigured()) {
       throw new Error('WhatsApp service not configured');
     }
 
-    const url = `${this.baseUrl}/${this.apiVersion}/${this.config!.phoneNumberId}`;
+    const url = `${this.baseUrl}/${this.apiVersion}/${this.config!.phoneNumberId}?fields=name,status,messaging_product`;
     
     try {
       const response = await axios.get(url, {
@@ -201,8 +241,8 @@ export class WhatsAppService {
 
       return response.data;
     } catch (error: any) {
-      console.error('Error getting business profile:', error.response?.data || error.message);
-      throw error;
+      console.error('Error getting business profile:', error.message || 'Unknown error');
+      throw new Error(error.response?.data?.error?.message || error.message || 'Failed to get business profile');
     }
   }
 }
