@@ -3,19 +3,107 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Users, Search, Plus, Edit, Trash2, Mail, Phone, User } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Textarea } from "@/components/ui/textarea";
+import { Users, Search, Plus, Edit, Trash2, Mail, Phone, User, MapPin, FileText, MessageCircle } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Guest } from "@shared/schema";
+import { insertGuestSchema } from "@shared/schema";
+
+const guestSchema = insertGuestSchema.extend({
+  cpf: z.string().optional().transform(val => val ? val.replace(/\D/g, '') : val).refine(val => !val || val.length === 11, "CPF deve ter 11 dígitos"),
+  street: z.string().optional(),
+  number: z.string().optional(),
+  complement: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  zipCode: z.string().optional().transform(val => val ? val.replace(/\D/g, '') : val).refine(val => !val || val.length === 8, "CEP deve ter 8 dígitos"),
+  notes: z.string().optional(),
+  phone: z.string().min(1, "WhatsApp é obrigatório").transform(val => val.replace(/\D/g, '')).refine(val => val.length >= 10 && val.length <= 11, "Telefone deve ter 10 ou 11 dígitos"),
+});
+
+type GuestFormData = z.infer<typeof guestSchema>;
 
 export default function Guests() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [isNewGuestOpen, setIsNewGuestOpen] = useState(false);
+  const [editingGuest, setEditingGuest] = useState<Guest | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const { data: guests, isLoading } = useQuery<Guest[]>({
     queryKey: ["/api/guests"],
+  });
+
+  const form = useForm<GuestFormData>({
+    resolver: zodResolver(guestSchema),
+    defaultValues: {
+      name: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      cpf: "",
+      street: "",
+      number: "",
+      complement: "",
+      city: "",
+      state: "",
+      zipCode: "",
+      notes: "",
+    },
+  });
+
+  const createGuestMutation = useMutation({
+    mutationFn: async (data: GuestFormData) => {
+      const response = await apiRequest("POST", "/api/guests", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/guests"] });
+      toast({
+        title: "Sucesso",
+        description: "Hóspede criado com sucesso!",
+      });
+      form.reset();
+      setIsNewGuestOpen(false);
+    },
+    onError: () => {
+      toast({
+        title: "Erro",
+        description: "Falha ao criar hóspede. Tente novamente.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateGuestMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: GuestFormData }) => {
+      const response = await apiRequest("PATCH", `/api/guests/${id}`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/guests"] });
+      toast({
+        title: "Sucesso",
+        description: "Hóspede atualizado com sucesso!",
+      });
+      form.reset();
+      setEditingGuest(null);
+    },
+    onError: () => {
+      toast({
+        title: "Erro",
+        description: "Falha ao atualizar hóspede. Tente novamente.",
+        variant: "destructive",
+      });
+    },
   });
 
   const deleteGuestMutation = useMutation({
@@ -38,16 +126,61 @@ export default function Guests() {
     },
   });
 
-  const filteredGuests = guests?.filter((guest) =>
-    guest.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    guest.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    guest.phone.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  const filteredGuests = guests?.filter((guest) => {
+    const fullName = `${guest.name} ${guest.lastName}`.toLowerCase();
+    const searchLower = searchTerm.toLowerCase();
+    return fullName.includes(searchLower) ||
+           guest.email.toLowerCase().includes(searchLower) ||
+           guest.phone.toLowerCase().includes(searchLower) ||
+           (guest.cpf && guest.cpf.toLowerCase().includes(searchLower));
+  }) || [];
+
+  const handleEditGuest = (guest: Guest) => {
+    setEditingGuest(guest);
+    form.reset({
+      name: guest.name,
+      lastName: guest.lastName,
+      email: guest.email,
+      phone: guest.phone,
+      cpf: guest.cpf || "",
+      street: guest.street || "",
+      number: guest.number || "",
+      complement: guest.complement || "",
+      city: guest.city || "",
+      state: guest.state || "",
+      zipCode: guest.zipCode || "",
+      notes: guest.notes || "",
+    });
+  };
 
   const handleDeleteGuest = (guestId: string) => {
     if (confirm("Tem certeza que deseja excluir este hóspede?")) {
       deleteGuestMutation.mutate(guestId);
     }
+  };
+
+  const onSubmit = (data: GuestFormData) => {
+    if (editingGuest) {
+      updateGuestMutation.mutate({ id: editingGuest.id, data });
+    } else {
+      createGuestMutation.mutate(data);
+    }
+  };
+
+  const closeModal = () => {
+    setIsNewGuestOpen(false);
+    setEditingGuest(null);
+    form.reset();
+  };
+
+  const formatCPF = (cpf: string) => {
+    if (!cpf) return '';
+    return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+  };
+
+  const formatPhone = (phone: string) => {
+    if (!phone) return '';
+    return phone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
   };
 
   if (isLoading) {
@@ -63,7 +196,7 @@ export default function Guests() {
               <Users className="w-5 h-5" />
               <span>Hóspedes</span>
             </CardTitle>
-            <Button data-testid="button-new-guest">
+            <Button onClick={() => setIsNewGuestOpen(true)} data-testid="button-new-guest">
               <Plus className="w-4 h-4 mr-2" />
               Novo Hóspede
             </Button>
@@ -75,7 +208,7 @@ export default function Guests() {
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <Input
-                placeholder="Buscar por nome, email ou telefone..."
+                placeholder="Buscar por nome, email, telefone ou CPF..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -92,16 +225,17 @@ export default function Guests() {
               <p className="text-gray-500">
                 {searchTerm 
                   ? "Tente ajustar os termos de busca." 
-                  : "Os hóspedes serão adicionados automaticamente quando você criar reservas."}
+                  : "Comece cadastrando seu primeiro hóspede."}
               </p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Telefone</TableHead>
+                  <TableHead>Nome Completo</TableHead>
+                  <TableHead>Contato</TableHead>
+                  <TableHead>Documentos</TableHead>
+                  <TableHead>Endereço</TableHead>
                   <TableHead>Data de Cadastro</TableHead>
                   <TableHead>Ações</TableHead>
                 </TableRow>
@@ -114,19 +248,56 @@ export default function Guests() {
                         <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
                           <User className="w-4 h-4 text-primary" />
                         </div>
-                        <span className="font-medium text-gray-900">{guest.name}</span>
+                        <div>
+                          <div className="font-medium text-gray-900">{guest.name} {guest.lastName}</div>
+                          {guest.notes && (
+                            <div className="text-sm text-gray-500 truncate max-w-[200px]">{guest.notes}</div>
+                          )}
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center space-x-2">
-                        <Mail className="w-4 h-4 text-gray-400" />
-                        <span>{guest.email}</span>
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <Mail className="w-4 h-4 text-gray-400" />
+                          <span className="text-sm">{guest.email}</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <MessageCircle className="w-4 h-4 text-green-600" />
+                          <span className="text-sm">{formatPhone(guest.phone)}</span>
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center space-x-2">
-                        <Phone className="w-4 h-4 text-gray-400" />
-                        <span>{guest.phone}</span>
+                      <div className="space-y-1">
+                        {guest.cpf && (
+                          <div className="flex items-center space-x-2">
+                            <FileText className="w-4 h-4 text-gray-400" />
+                            <span className="text-sm font-mono">{formatCPF(guest.cpf)}</span>
+                          </div>
+                        )}
+                        {!guest.cpf && (
+                          <span className="text-sm text-gray-400">CPF não informado</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        {guest.street && (
+                          <div className="flex items-center space-x-2">
+                            <MapPin className="w-4 h-4 text-gray-400" />
+                            <div className="text-sm">
+                              <div>{guest.street}, {guest.number}</div>
+                              {guest.complement && <div className="text-gray-500">{guest.complement}</div>}
+                              {guest.city && guest.state && (
+                                <div className="text-gray-500">{guest.city} - {guest.state}</div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        {!guest.street && (
+                          <span className="text-sm text-gray-400">Endereço não informado</span>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -134,7 +305,12 @@ export default function Guests() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center space-x-2">
-                        <Button variant="ghost" size="sm" data-testid={`button-edit-guest-${guest.id}`}>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => handleEditGuest(guest)}
+                          data-testid={`button-edit-guest-${guest.id}`}
+                        >
                           <Edit className="w-4 h-4" />
                         </Button>
                         <Button 
@@ -155,6 +331,316 @@ export default function Guests() {
           )}
         </CardContent>
       </Card>
+
+      {/* New/Edit Guest Modal */}
+      <Dialog open={isNewGuestOpen || !!editingGuest} onOpenChange={closeModal}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="guest-modal">
+          <DialogHeader>
+            <DialogTitle>
+              {editingGuest ? "Editar Hóspede" : "Novo Hóspede"}
+            </DialogTitle>
+            <DialogDescription>
+              {editingGuest 
+                ? "Atualize as informações do hóspede nos campos abaixo." 
+                : "Preencha as informações do novo hóspede. Campos marcados com * são obrigatórios."}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              {/* Dados Pessoais */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium text-gray-900 border-b pb-2">Dados Pessoais</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nome *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Nome" {...field} data-testid="input-guest-name" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="lastName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Sobrenome *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Sobrenome" {...field} data-testid="input-guest-lastname" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="cpf"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>CPF</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="000.000.000-00" 
+                            {...field} 
+                            data-testid="input-guest-cpf"
+                            maxLength={14}
+                            onChange={(e) => {
+                              let value = e.target.value.replace(/\D/g, '');
+                              let formatted = value;
+                              if (value.length <= 11) {
+                                formatted = value.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+                              }
+                              e.target.value = formatted;
+                              field.onChange(formatted);
+                            }}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>WhatsApp *</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="(11) 99999-9999" 
+                            {...field} 
+                            data-testid="input-guest-phone"
+                            maxLength={15}
+                            onChange={(e) => {
+                              let value = e.target.value.replace(/\D/g, '');
+                              let formatted = value;
+                              if (value.length <= 11) {
+                                formatted = value.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+                              }
+                              e.target.value = formatted;
+                              field.onChange(formatted);
+                            }}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email *</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="email" 
+                          placeholder="email@exemplo.com" 
+                          {...field} 
+                          data-testid="input-guest-email" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Endereço */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium text-gray-900 border-b pb-2">Endereço</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="md:col-span-2">
+                    <FormField
+                      control={form.control}
+                      name="street"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Rua/Avenida/Praça</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Nome da rua, avenida ou praça" {...field} data-testid="input-guest-street" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  
+                  <FormField
+                    control={form.control}
+                    name="number"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Número</FormLabel>
+                        <FormControl>
+                          <Input placeholder="123" {...field} data-testid="input-guest-number" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                
+                <FormField
+                  control={form.control}
+                  name="complement"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Complemento</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Apartamento, casa, bloco, etc." {...field} data-testid="input-guest-complement" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="city"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Cidade</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Nome da cidade" {...field} data-testid="input-guest-city" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="state"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Estado</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-guest-state">
+                              <SelectValue placeholder="Estado" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="AC">Acre</SelectItem>
+                            <SelectItem value="AL">Alagoas</SelectItem>
+                            <SelectItem value="AP">Amapá</SelectItem>
+                            <SelectItem value="AM">Amazonas</SelectItem>
+                            <SelectItem value="BA">Bahia</SelectItem>
+                            <SelectItem value="CE">Ceará</SelectItem>
+                            <SelectItem value="DF">Distrito Federal</SelectItem>
+                            <SelectItem value="ES">Espírito Santo</SelectItem>
+                            <SelectItem value="GO">Goiás</SelectItem>
+                            <SelectItem value="MA">Maranhão</SelectItem>
+                            <SelectItem value="MT">Mato Grosso</SelectItem>
+                            <SelectItem value="MS">Mato Grosso do Sul</SelectItem>
+                            <SelectItem value="MG">Minas Gerais</SelectItem>
+                            <SelectItem value="PA">Pará</SelectItem>
+                            <SelectItem value="PB">Paraíba</SelectItem>
+                            <SelectItem value="PR">Paraná</SelectItem>
+                            <SelectItem value="PE">Pernambuco</SelectItem>
+                            <SelectItem value="PI">Piauí</SelectItem>
+                            <SelectItem value="RJ">Rio de Janeiro</SelectItem>
+                            <SelectItem value="RN">Rio Grande do Norte</SelectItem>
+                            <SelectItem value="RS">Rio Grande do Sul</SelectItem>
+                            <SelectItem value="RO">Rondônia</SelectItem>
+                            <SelectItem value="RR">Roraima</SelectItem>
+                            <SelectItem value="SC">Santa Catarina</SelectItem>
+                            <SelectItem value="SP">São Paulo</SelectItem>
+                            <SelectItem value="SE">Sergipe</SelectItem>
+                            <SelectItem value="TO">Tocantins</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="zipCode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>CEP</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="00000-000" 
+                            {...field} 
+                            data-testid="input-guest-zipcode"
+                            maxLength={9}
+                            onChange={(e) => {
+                              let value = e.target.value.replace(/\D/g, '');
+                              let formatted = value;
+                              if (value.length <= 8) {
+                                formatted = value.replace(/(\d{5})(\d{3})/, '$1-$2');
+                              }
+                              e.target.value = formatted;
+                              field.onChange(formatted);
+                            }}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+
+              {/* Observações */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium text-gray-900 border-b pb-2">Observações</h3>
+                <FormField
+                  control={form.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Observações</FormLabel>
+                      <FormControl>
+                        <Textarea 
+                          rows={3} 
+                          placeholder="Informações adicionais sobre o hóspede..." 
+                          {...field} 
+                          data-testid="textarea-guest-notes"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+                <Button type="button" variant="outline" onClick={closeModal} data-testid="button-cancel-guest">
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={createGuestMutation.isPending || updateGuestMutation.isPending}
+                  data-testid="button-save-guest"
+                >
+                  {(createGuestMutation.isPending || updateGuestMutation.isPending) 
+                    ? "Salvando..." 
+                    : editingGuest ? "Atualizar Hóspede" : "Criar Hóspede"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
