@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { whatsappService } from "./whatsapp-service";
 import { 
   insertPropertySchema, insertGuestSchema, insertBookingSchema,
   insertMaintenanceTaskSchema, insertExpenseSchema, insertMessageSchema
@@ -319,6 +320,153 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch dashboard stats" });
+    }
+  });
+
+  // WhatsApp routes
+  app.get("/api/whatsapp/webhook", (req, res) => {
+    const mode = req.query["hub.mode"];
+    const token = req.query["hub.verify_token"];
+    const challenge = req.query["hub.challenge"];
+
+    const result = whatsappService.verifyWebhook(mode as string, token as string, challenge as string);
+    
+    if (result) {
+      res.status(200).send(result);
+    } else {
+      res.sendStatus(403);
+    }
+  });
+
+  app.post("/api/whatsapp/webhook", async (req, res) => {
+    try {
+      const body = req.body;
+      
+      if (body.object === 'whatsapp_business_account') {
+        for (const entry of body.entry) {
+          for (const change of entry.changes) {
+            if (change.field === 'messages') {
+              if (change.value.messages) {
+                await whatsappService.processIncomingMessage(change.value);
+              }
+              if (change.value.statuses) {
+                await whatsappService.processStatusUpdate(change.value);
+              }
+            }
+          }
+        }
+      }
+      
+      res.status(200).send('EVENT_RECEIVED');
+    } catch (error) {
+      console.error('WhatsApp webhook error:', error);
+      res.status(500).json({ message: "Failed to process webhook" });
+    }
+  });
+
+  app.post("/api/whatsapp/config", async (req, res) => {
+    try {
+      const { accessToken, phoneNumberId, verifyToken, webhookUrl } = req.body;
+      
+      if (!accessToken || !phoneNumberId || !verifyToken) {
+        return res.status(400).json({ message: "Missing required WhatsApp configuration" });
+      }
+
+      whatsappService.setConfig({
+        accessToken,
+        phoneNumberId,
+        verifyToken,
+        webhookUrl
+      });
+
+      res.json({ message: "WhatsApp configured successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to configure WhatsApp" });
+    }
+  });
+
+  app.get("/api/whatsapp/status", async (req, res) => {
+    try {
+      const isConfigured = whatsappService.isConfigured();
+      let profile = null;
+      
+      if (isConfigured) {
+        try {
+          profile = await whatsappService.getBusinessProfile();
+        } catch (error) {
+          console.error('Failed to get business profile:', error);
+        }
+      }
+
+      res.json({
+        configured: isConfigured,
+        profile
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get WhatsApp status" });
+    }
+  });
+
+  app.post("/api/whatsapp/send", async (req, res) => {
+    try {
+      const { to, message, guestId, bookingId } = req.body;
+      
+      if (!to || !message) {
+        return res.status(400).json({ message: "Missing required fields: to, message" });
+      }
+
+      if (!whatsappService.isConfigured()) {
+        return res.status(400).json({ message: "WhatsApp not configured" });
+      }
+
+      const result = await whatsappService.sendTextMessage(to, message, guestId, bookingId);
+      res.json(result);
+    } catch (error: any) {
+      console.error('WhatsApp send error:', error);
+      res.status(500).json({ 
+        message: "Failed to send WhatsApp message",
+        error: error.message 
+      });
+    }
+  });
+
+  app.post("/api/whatsapp/send-template", async (req, res) => {
+    try {
+      const { to, templateName, languageCode, parameters, guestId, bookingId } = req.body;
+      
+      if (!to || !templateName) {
+        return res.status(400).json({ message: "Missing required fields: to, templateName" });
+      }
+
+      if (!whatsappService.isConfigured()) {
+        return res.status(400).json({ message: "WhatsApp not configured" });
+      }
+
+      const result = await whatsappService.sendTemplateMessage(
+        to, 
+        templateName, 
+        languageCode || 'pt_BR', 
+        parameters, 
+        guestId, 
+        bookingId
+      );
+      res.json(result);
+    } catch (error: any) {
+      console.error('WhatsApp template send error:', error);
+      res.status(500).json({ 
+        message: "Failed to send WhatsApp template",
+        error: error.message 
+      });
+    }
+  });
+
+  app.get("/api/messages/whatsapp", async (req, res) => {
+    try {
+      const { phoneNumber } = req.query;
+      const messages = await storage.getWhatsAppMessages(phoneNumber as string);
+      res.json(messages);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch WhatsApp messages" });
     }
   });
 
