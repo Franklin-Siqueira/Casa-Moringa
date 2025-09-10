@@ -148,6 +148,13 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const newGuest: Guest = {
       ...guest,
+      cpf: guest.cpf ?? null,
+      street: guest.street ?? null,
+      number: guest.number ?? null,
+      complement: guest.complement ?? null,
+      city: guest.city ?? null,
+      state: guest.state ?? null,
+      zipCode: guest.zipCode ?? null,
       document: guest.document ?? null,
       notes: guest.notes ?? null,
       id,
