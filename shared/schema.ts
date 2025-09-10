@@ -71,6 +71,12 @@ export const messages = pgTable("messages", {
   subject: text("subject"),
   content: text("content").notNull(),
   type: text("type").notNull().default("general"), // general, check_in_instructions, reminder, complaint
+  channel: text("channel").notNull().default("internal"), // internal, whatsapp, email, sms
+  direction: text("direction").notNull().default("outgoing"), // incoming, outgoing
+  whatsappMessageId: text("whatsapp_message_id"), // WhatsApp message ID for tracking
+  whatsappStatus: text("whatsapp_status"), // sent, delivered, read, failed
+  fromNumber: text("from_number"), // For incoming WhatsApp messages
+  toNumber: text("to_number"), // For outgoing WhatsApp messages
   isRead: boolean("is_read").notNull().default(false),
   sentAt: timestamp("sent_at").defaultNow(),
 });
@@ -132,4 +138,9 @@ export type MaintenanceTaskWithProperty = MaintenanceTask & {
 
 export type ExpenseWithProperty = Expense & {
   property: Property;
+};
+
+export type MessageWithRelations = Message & {
+  guest?: Guest;
+  booking?: Booking;
 };

@@ -5,7 +5,8 @@ import {
   type MaintenanceTask, type InsertMaintenanceTask,
   type Expense, type InsertExpense,
   type Message, type InsertMessage,
-  type BookingWithGuest
+  type BookingWithGuest,
+  type MessageWithRelations
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -53,12 +54,15 @@ export interface IStorage {
   deleteExpense(id: string): Promise<boolean>;
 
   // Messages
-  getMessages(): Promise<Message[]>;
-  getMessage(id: string): Promise<Message | undefined>;
-  getMessagesByBooking(bookingId: string): Promise<Message[]>;
-  getMessagesByGuest(guestId: string): Promise<Message[]>;
+  getMessages(): Promise<MessageWithRelations[]>;
+  getMessage(id: string): Promise<MessageWithRelations | undefined>;
+  getMessagesByBooking(bookingId: string): Promise<MessageWithRelations[]>;
+  getMessagesByGuest(guestId: string): Promise<MessageWithRelations[]>;
+  getMessagesByChannel(channel: string): Promise<MessageWithRelations[]>;
+  getWhatsAppMessages(phoneNumber?: string): Promise<MessageWithRelations[]>;
   createMessage(message: InsertMessage): Promise<Message>;
   updateMessage(id: string, message: Partial<InsertMessage>): Promise<Message | undefined>;
+  updateWhatsAppMessageStatus(whatsappMessageId: string, status: string): Promise<Message | undefined>;
   deleteMessage(id: string): Promise<boolean>;
 }
 
@@ -333,20 +337,57 @@ export class MemStorage implements IStorage {
   }
 
   // Messages
-  async getMessages(): Promise<Message[]> {
-    return Array.from(this.messages.values());
+  async getMessages(): Promise<MessageWithRelations[]> {
+    const messages = Array.from(this.messages.values());
+    return Promise.all(
+      messages.map(async (message) => {
+        const guest = message.guestId ? await this.getGuest(message.guestId) : undefined;
+        const booking = message.bookingId ? await this.getBooking(message.bookingId) : undefined;
+        return {
+          ...message,
+          guest,
+          booking,
+        };
+      })
+    );
   }
 
-  async getMessage(id: string): Promise<Message | undefined> {
-    return this.messages.get(id);
+  async getMessage(id: string): Promise<MessageWithRelations | undefined> {
+    const message = this.messages.get(id);
+    if (!message) return undefined;
+    
+    const guest = message.guestId ? await this.getGuest(message.guestId) : undefined;
+    const booking = message.bookingId ? await this.getBooking(message.bookingId) : undefined;
+    
+    return {
+      ...message,
+      guest,
+      booking,
+    };
   }
 
-  async getMessagesByBooking(bookingId: string): Promise<Message[]> {
-    return Array.from(this.messages.values()).filter(message => message.bookingId === bookingId);
+  async getMessagesByBooking(bookingId: string): Promise<MessageWithRelations[]> {
+    const allMessages = await this.getMessages();
+    return allMessages.filter(message => message.bookingId === bookingId);
   }
 
-  async getMessagesByGuest(guestId: string): Promise<Message[]> {
-    return Array.from(this.messages.values()).filter(message => message.guestId === guestId);
+  async getMessagesByGuest(guestId: string): Promise<MessageWithRelations[]> {
+    const allMessages = await this.getMessages();
+    return allMessages.filter(message => message.guestId === guestId);
+  }
+
+  async getMessagesByChannel(channel: string): Promise<MessageWithRelations[]> {
+    const allMessages = await this.getMessages();
+    return allMessages.filter(message => message.channel === channel);
+  }
+
+  async getWhatsAppMessages(phoneNumber?: string): Promise<MessageWithRelations[]> {
+    const whatsappMessages = await this.getMessagesByChannel("whatsapp");
+    if (!phoneNumber) return whatsappMessages;
+    
+    return whatsappMessages.filter(message => 
+      message.fromNumber === phoneNumber || message.toNumber === phoneNumber
+    );
   }
 
   async createMessage(message: InsertMessage): Promise<Message> {
@@ -357,6 +398,12 @@ export class MemStorage implements IStorage {
       bookingId: message.bookingId ?? null,
       subject: message.subject ?? null,
       type: message.type ?? "general",
+      channel: message.channel ?? "internal",
+      direction: message.direction ?? "outgoing",
+      whatsappMessageId: message.whatsappMessageId ?? null,
+      whatsappStatus: message.whatsappStatus ?? null,
+      fromNumber: message.fromNumber ?? null,
+      toNumber: message.toNumber ?? null,
       isRead: message.isRead ?? false,
       id,
       sentAt: new Date(),
@@ -371,6 +418,17 @@ export class MemStorage implements IStorage {
     
     const updated: Message = { ...existing, ...message };
     this.messages.set(id, updated);
+    return updated;
+  }
+
+  async updateWhatsAppMessageStatus(whatsappMessageId: string, status: string): Promise<Message | undefined> {
+    const messages = Array.from(this.messages.values());
+    const message = messages.find(m => m.whatsappMessageId === whatsappMessageId);
+    
+    if (!message) return undefined;
+    
+    const updated: Message = { ...message, whatsappStatus: status };
+    this.messages.set(message.id, updated);
     return updated;
   }
 
