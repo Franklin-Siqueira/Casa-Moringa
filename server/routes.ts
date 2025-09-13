@@ -162,22 +162,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const bookingData = insertBookingSchema.parse(req.body);
       
-      // Check if guest exists, create if not
-      let guest = await storage.getGuestByEmail(req.body.guestEmail);
-      if (!guest && req.body.guestData) {
-        guest = await storage.createGuest(req.body.guestData);
-      }
-      
+      // Verify guest exists
+      const guest = await storage.getGuest(bookingData.guestId);
       if (!guest) {
-        return res.status(400).json({ message: "Guest information required" });
+        return res.status(400).json({ message: "Guest not found" });
       }
       
-      const booking = await storage.createBooking({ 
-        ...bookingData, 
-        guestId: guest.id 
-      });
+      const booking = await storage.createBooking(bookingData);
       res.status(201).json(booking);
     } catch (error) {
+      console.error("Error creating booking:", error);
       res.status(400).json({ message: "Invalid booking data" });
     }
   });
@@ -268,6 +262,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const expenseData = insertExpenseSchema.parse(req.body);
       const expense = await storage.createExpense(expenseData);
       res.status(201).json(expense);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid expense data" });
+    }
+  });
+
+  app.patch("/api/expenses/:id", async (req, res) => {
+    try {
+      const expenseData = insertExpenseSchema.partial().parse(req.body);
+      const expense = await storage.updateExpense(req.params.id, expenseData);
+      if (!expense) {
+        return res.status(404).json({ message: "Expense not found" });
+      }
+      res.json(expense);
     } catch (error) {
       res.status(400).json({ message: "Invalid expense data" });
     }

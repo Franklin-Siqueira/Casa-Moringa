@@ -14,43 +14,41 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { BookingWithGuest, MaintenanceTask, Expense, Property, Guest } from "@shared/schema";
+import { 
+  insertBookingSchema, insertMaintenanceTaskSchema, insertExpenseSchema
+} from "@shared/schema";
+import type { 
+  BookingWithGuest, MaintenanceTask, Expense, Property, Guest,
+  InsertBooking, InsertMaintenanceTask, InsertExpense
+} from "@shared/schema";
 
-// Schema definitions for calendar forms
-const bookingSchema = z.object({
-  propertyId: z.string().min(1, "Propriedade é obrigatória"),
-  guestId: z.string().min(1, "Hóspede é obrigatório"),
+// Form validation schemas extending insert schemas with UI-specific validation
+const bookingFormSchema = insertBookingSchema.extend({
   checkIn: z.string().min(1, "Data de entrada é obrigatória"),
   checkOut: z.string().min(1, "Data de saída é obrigatória"),
   numberOfGuests: z.string().min(1, "Número de hóspedes é obrigatório"),
   totalAmount: z.string().min(1, "Valor total é obrigatório"),
-  status: z.enum(["pending", "confirmed", "cancelled", "completed"]).default("pending"),
-  notes: z.string().optional(),
+}).omit({
+  // Remove fields that are handled differently in forms
 });
 
-const maintenanceSchema = z.object({
-  propertyId: z.string().min(1, "Propriedade é obrigatória"),
-  title: z.string().min(1, "Título é obrigatório"),
-  description: z.string().optional(),
-  type: z.enum(["cleaning", "repair", "maintenance", "inspection"]),
-  status: z.enum(["pending", "in_progress", "completed", "cancelled"]).default("pending"),
+const maintenanceFormSchema = insertMaintenanceTaskSchema.extend({
   scheduledDate: z.string().min(1, "Data é obrigatória"),
-  assignedTo: z.string().optional(),
   cost: z.string().optional(),
-  notes: z.string().optional(),
+}).omit({
+  completedDate: true,
 });
 
-const expenseSchema = z.object({
-  propertyId: z.string().min(1, "Propriedade é obrigatória"),
-  category: z.enum(["maintenance", "utilities", "supplies", "insurance", "taxes", "other"]),
-  description: z.string().min(1, "Descrição é obrigatória"),
-  amount: z.string().min(1, "Valor é obrigatório"),
+const expenseFormSchema = insertExpenseSchema.extend({
   date: z.string().min(1, "Data é obrigatória"),
+  amount: z.string().min(1, "Valor é obrigatório"),
+}).omit({
+  receipt: true,
 });
 
-type BookingFormData = z.infer<typeof bookingSchema>;
-type MaintenanceFormData = z.infer<typeof maintenanceSchema>;
-type ExpenseFormData = z.infer<typeof expenseSchema>;
+type BookingFormData = z.infer<typeof bookingFormSchema>;
+type MaintenanceFormData = z.infer<typeof maintenanceFormSchema>;
+type ExpenseFormData = z.infer<typeof expenseFormSchema>;
 
 export default function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -82,7 +80,7 @@ export default function Calendar() {
 
   // Form setup
   const bookingForm = useForm<BookingFormData>({
-    resolver: zodResolver(bookingSchema),
+    resolver: zodResolver(bookingFormSchema),
     defaultValues: {
       propertyId: "",
       guestId: "",
@@ -96,7 +94,7 @@ export default function Calendar() {
   });
 
   const maintenanceForm = useForm<MaintenanceFormData>({
-    resolver: zodResolver(maintenanceSchema),
+    resolver: zodResolver(maintenanceFormSchema),
     defaultValues: {
       propertyId: "",
       title: "",
@@ -111,7 +109,7 @@ export default function Calendar() {
   });
 
   const expenseForm = useForm<ExpenseFormData>({
-    resolver: zodResolver(expenseSchema),
+    resolver: zodResolver(expenseFormSchema),
     defaultValues: {
       propertyId: "",
       category: "other",
@@ -184,7 +182,7 @@ export default function Calendar() {
       const taskData = {
         ...data,
         scheduledDate: new Date(data.scheduledDate).toISOString(),
-        cost: data.cost ? data.cost : undefined,
+        cost: data.cost ? parseFloat(data.cost) : undefined,
       };
       const response = await apiRequest("POST", "/api/maintenance", taskData);
       return response.json();
@@ -204,6 +202,7 @@ export default function Calendar() {
       const expenseData = {
         ...data,
         date: new Date(data.date).toISOString(),
+        amount: parseFloat(data.amount),
       };
       const response = await apiRequest("POST", "/api/expenses", expenseData);
       return response.json();
@@ -218,6 +217,68 @@ export default function Calendar() {
     },
   });
 
+  // Update mutations
+  const updateBookingMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: BookingFormData }) => {
+      const bookingData = {
+        ...data,
+        checkIn: new Date(data.checkIn).toISOString(),
+        checkOut: new Date(data.checkOut).toISOString(),
+        numberOfGuests: parseInt(data.numberOfGuests),
+      };
+      const response = await apiRequest("PATCH", `/api/bookings/${id}`, bookingData);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bookings"] });
+      toast({ title: "Sucesso", description: "Reserva atualizada com sucesso!" });
+      closeModal();
+    },
+    onError: () => {
+      toast({ title: "Erro", description: "Falha ao atualizar reserva.", variant: "destructive" });
+    },
+  });
+
+  const updateMaintenanceMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: MaintenanceFormData }) => {
+      const taskData = {
+        ...data,
+        scheduledDate: new Date(data.scheduledDate).toISOString(),
+        cost: data.cost ? parseFloat(data.cost) : undefined,
+      };
+      const response = await apiRequest("PATCH", `/api/maintenance/${id}`, taskData);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/maintenance"] });
+      toast({ title: "Sucesso", description: "Tarefa de manutenção atualizada com sucesso!" });
+      closeModal();
+    },
+    onError: () => {
+      toast({ title: "Erro", description: "Falha ao atualizar tarefa.", variant: "destructive" });
+    },
+  });
+
+  const updateExpenseMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: ExpenseFormData }) => {
+      const expenseData = {
+        ...data,
+        date: new Date(data.date).toISOString(),
+        amount: parseFloat(data.amount),
+      };
+      const response = await apiRequest("PATCH", `/api/expenses/${id}`, expenseData);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/expenses"] });
+      toast({ title: "Sucesso", description: "Despesa atualizada com sucesso!" });
+      closeModal();
+    },
+    onError: () => {
+      toast({ title: "Erro", description: "Falha ao atualizar despesa.", variant: "destructive" });
+    },
+  });
+
   const getEventsForDate = (date: Date) => {
     const events: any[] = [];
     const targetDate = new Date(date);
@@ -225,16 +286,16 @@ export default function Calendar() {
 
     // Bookings
     if (bookings) {
-      const booking = bookings.find(booking => {
+      const dayBookings = bookings.filter(booking => {
         const checkIn = new Date(booking.checkIn);
         const checkOut = new Date(booking.checkOut);
         checkIn.setHours(0, 0, 0, 0);
         checkOut.setHours(0, 0, 0, 0);
         return targetDate >= checkIn && targetDate < checkOut;
       });
-      if (booking) {
+      dayBookings.forEach(booking => {
         events.push({ type: 'booking', data: booking });
-      }
+      });
     }
 
     // Maintenance tasks
@@ -363,11 +424,23 @@ export default function Calendar() {
 
   const onSubmit = (type: 'booking' | 'maintenance' | 'expense', data: any) => {
     if (type === 'booking') {
-      createBookingMutation.mutate(data);
+      if (editingItem && editingItem.id) {
+        updateBookingMutation.mutate({ id: editingItem.id, data });
+      } else {
+        createBookingMutation.mutate(data);
+      }
     } else if (type === 'maintenance') {
-      createMaintenanceMutation.mutate(data);
+      if (editingItem && editingItem.id) {
+        updateMaintenanceMutation.mutate({ id: editingItem.id, data });
+      } else {
+        createMaintenanceMutation.mutate(data);
+      }
     } else if (type === 'expense') {
-      createExpenseMutation.mutate(data);
+      if (editingItem && editingItem.id) {
+        updateExpenseMutation.mutate({ id: editingItem.id, data });
+      } else {
+        createExpenseMutation.mutate(data);
+      }
     }
   };
 
