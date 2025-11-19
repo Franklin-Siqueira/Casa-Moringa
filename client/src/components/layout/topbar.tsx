@@ -54,7 +54,7 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
   return (
     <>
       <header className="bg-card shadow-sm border-b border-gray-200 sticky top-0 z-20" data-testid="topbar">
-        <div className="flex items-center justify-between h-16 px-6">
+        <div className="flex items-center justify-between h-16 px-4 md:px-6">
           <div className="flex items-center space-x-4">
             <button className="lg:hidden" onClick={onToggleSidebar} data-testid="button-menu">
               <Menu className="text-gray-500 w-5 h-5" />
@@ -79,7 +79,7 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
 
       {/* Settings Dialog */}
       <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-        <DialogContent className="max-w-2xl" data-testid="settings-dialog">
+        <DialogContent className="max-w-full sm:max-w-lg md:max-w-xl lg:max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="settings-dialog">
           <DialogHeader>
             <DialogTitle>Configurações</DialogTitle>
             <DialogDescription>
@@ -88,14 +88,14 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
           </DialogHeader>
           
           <Tabs defaultValue="general" className="mt-6">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-1 md:grid-cols-3">
               <TabsTrigger value="general">Geral</TabsTrigger>
               <TabsTrigger value="notifications">Notificações</TabsTrigger>
               <TabsTrigger value="account">Conta</TabsTrigger>
             </TabsList>
             
             <TabsContent value="general" className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="language">Idioma</Label>
                   <Input 

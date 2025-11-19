@@ -611,7 +611,7 @@ export default function Calendar() {
           </div>
           
           {/* Legend */}
-          <div className="grid grid-cols-3 gap-8 mt-6 pt-6 border-t border-gray-200">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mt-6 pt-6 border-t border-gray-200">
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-gray-900">Reservas</h4>
               <div className="space-y-1">
@@ -663,7 +663,7 @@ export default function Calendar() {
 
       {/* Booking Modal */}
       <Dialog open={modalType === 'booking'} onOpenChange={(open) => !open && closeModal()}>
-        <DialogContent className="max-w-2xl" data-testid="booking-modal">
+        <DialogContent className="max-w-full sm:max-w-lg md:max-w-xl lg:max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="booking-modal">
           <DialogHeader>
             <DialogTitle>
               {editingItem ? "Editar Reserva" : "Nova Reserva"}
@@ -851,7 +851,7 @@ export default function Calendar() {
 
       {/* Maintenance Modal */}
       <Dialog open={modalType === 'maintenance'} onOpenChange={(open) => !open && closeModal()}>
-        <DialogContent className="max-w-2xl" data-testid="maintenance-modal">
+        <DialogContent className="max-w-full sm:max-w-lg md:max-w-xl lg:max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="maintenance-modal">
           <DialogHeader>
             <DialogTitle>
               {editingItem ? "Editar Manutenção" : "Nova Tarefa de Manutenção"}
@@ -1031,7 +1031,7 @@ export default function Calendar() {
 
       {/* Expense Modal */}
       <Dialog open={modalType === 'expense'} onOpenChange={(open) => !open && closeModal()}>
-        <DialogContent className="max-w-lg" data-testid="expense-modal">
+        <DialogContent className="max-w-full sm:max-w-lg max-h-[90vh] overflow-y-auto" data-testid="expense-modal">
           <DialogHeader>
             <DialogTitle>
               {editingItem ? "Editar Despesa" : "Nova Despesa"}

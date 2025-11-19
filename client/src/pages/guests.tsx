@@ -228,19 +228,20 @@ export default function Guests() {
               </p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome Completo</TableHead>
-                  <TableHead>Contato</TableHead>
-                  <TableHead>Documentos</TableHead>
-                  <TableHead>Endereço</TableHead>
-                  <TableHead>Data de Cadastro</TableHead>
-                  <TableHead>Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredGuests.map((guest) => (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nome Completo</TableHead>
+                    <TableHead>Contato</TableHead>
+                    <TableHead>Documentos</TableHead>
+                    <TableHead>Endereço</TableHead>
+                    <TableHead>Data de Cadastro</TableHead>
+                    <TableHead>Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredGuests.map((guest) => (
                   <TableRow key={guest.id} data-testid={`guest-row-${guest.id}`}>
                     <TableCell>
                       <div className="flex items-center space-x-3">
@@ -325,15 +326,16 @@ export default function Guests() {
                     </TableCell>
                   </TableRow>
                 ))}
-              </TableBody>
-            </Table>
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
 
       {/* New/Edit Guest Modal */}
       <Dialog open={isNewGuestOpen || !!editingGuest} onOpenChange={closeModal}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="guest-modal">
+        <DialogContent className="max-w-full sm:max-w-lg md:max-w-2xl lg:max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="guest-modal">
           <DialogHeader>
             <DialogTitle>
               {editingGuest ? "Editar Hóspede" : "Novo Hóspede"}

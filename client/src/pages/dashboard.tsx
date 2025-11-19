@@ -183,7 +183,7 @@ export default function Dashboard() {
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-4 md:p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-secondary text-sm font-medium">Taxa de Ocupação</p>
@@ -203,7 +203,7 @@ export default function Dashboard() {
           </Card>
 
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-4 md:p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-secondary text-sm font-medium">Receita Mensal</p>
@@ -223,7 +223,7 @@ export default function Dashboard() {
           </Card>
 
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-4 md:p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-secondary text-sm font-medium">Reservas Ativas</p>
@@ -243,7 +243,7 @@ export default function Dashboard() {
           </Card>
 
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-4 md:p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-secondary text-sm font-medium">Avaliação Média</p>
@@ -268,7 +268,7 @@ export default function Dashboard() {
           {/* Quick Actions */}
           <div className="lg:col-span-1">
             <Card>
-              <CardContent className="p-6">
+              <CardContent className="p-4 md:p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Ações Rápidas</h3>
                 <div className="space-y-3">
                   {quickActions.map((action) => {
@@ -297,7 +297,7 @@ export default function Dashboard() {
           {/* Recent Bookings */}
           <div className="lg:col-span-2">
             <Card>
-              <CardContent className="p-6">
+              <CardContent className="p-4 md:p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-900">Próximas Reservas</h3>
                   <Button variant="link" className="text-primary hover:text-primary-dark text-sm font-medium p-0">
@@ -354,7 +354,7 @@ export default function Dashboard() {
 
         {/* Calendar Preview */}
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="p-4 md:p-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-semibold text-gray-900">Visão do Mês - {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</h3>
               <Button variant="link" className="text-primary hover:text-primary-dark text-sm font-medium p-0">
@@ -394,7 +394,7 @@ export default function Dashboard() {
       
       {/* Schedule Cleaning Modal */}
       <Dialog open={isCleaningModalOpen} onOpenChange={setIsCleaningModalOpen}>
-        <DialogContent data-testid="cleaning-modal">
+        <DialogContent className="max-w-full sm:max-w-lg max-h-[90vh] overflow-y-auto" data-testid="cleaning-modal">
           <DialogHeader>
             <DialogTitle>Agendar Limpeza</DialogTitle>
             <DialogDescription>
@@ -474,7 +474,7 @@ export default function Dashboard() {
       
       {/* Send Message Modal */}
       <Dialog open={isMessageModalOpen} onOpenChange={setIsMessageModalOpen}>
-        <DialogContent data-testid="message-modal">
+        <DialogContent className="max-w-full sm:max-w-lg max-h-[90vh] overflow-y-auto" data-testid="message-modal">
           <DialogHeader>
             <DialogTitle>Enviar Mensagem</DialogTitle>
             <DialogDescription>

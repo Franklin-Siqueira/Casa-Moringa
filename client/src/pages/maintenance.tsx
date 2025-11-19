@@ -236,7 +236,7 @@ export default function Maintenance() {
           </CardHeader>
           <CardContent>
             {/* Filters */}
-            <div className="flex items-center space-x-4 mb-6">
+            <div className="flex flex-col md:flex-row items-stretch md:items-center space-y-4 md:space-y-0 md:space-x-4 mb-6">
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input
@@ -288,20 +288,21 @@ export default function Maintenance() {
                 </p>
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Título</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Data Agendada</TableHead>
-                    <TableHead>Responsável</TableHead>
-                    <TableHead>Custo</TableHead>
-                    <TableHead>Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredTasks.map((task) => (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Título</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Data Agendada</TableHead>
+                      <TableHead>Responsável</TableHead>
+                      <TableHead>Custo</TableHead>
+                      <TableHead>Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredTasks.map((task) => (
                     <TableRow key={task.id} data-testid={`task-row-${task.id}`}>
                       <TableCell>
                         <div>
@@ -372,9 +373,10 @@ export default function Maintenance() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -382,7 +384,7 @@ export default function Maintenance() {
 
       {/* New/Edit Task Modal */}
       <Dialog open={isNewTaskOpen} onOpenChange={closeModal}>
-        <DialogContent className="max-w-2xl" data-testid="task-modal">
+        <DialogContent className="max-w-full sm:max-w-lg md:max-w-xl lg:max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="task-modal">
           <DialogHeader>
             <DialogTitle>
               {editingTask ? "Editar Tarefa" : "Nova Tarefa de Manutenção"}

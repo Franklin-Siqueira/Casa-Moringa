@@ -289,7 +289,7 @@ export default function Finances() {
           </CardHeader>
           <CardContent>
             {/* Filters */}
-            <div className="flex items-center space-x-4 mb-6">
+            <div className="flex flex-col md:flex-row items-stretch md:items-center space-y-4 md:space-y-0 md:space-x-4 mb-6">
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input
@@ -342,18 +342,19 @@ export default function Finances() {
                 </p>
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead>Categoria</TableHead>
-                    <TableHead>Valor</TableHead>
-                    <TableHead>Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredExpenses.map((expense) => (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Data</TableHead>
+                      <TableHead>Descrição</TableHead>
+                      <TableHead>Categoria</TableHead>
+                      <TableHead>Valor</TableHead>
+                      <TableHead>Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredExpenses.map((expense) => (
                     <TableRow key={expense.id} data-testid={`expense-row-${expense.id}`}>
                       <TableCell>
                         <div className="flex items-center space-x-2">
@@ -389,9 +390,10 @@ export default function Finances() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -399,7 +401,7 @@ export default function Finances() {
 
       {/* New Expense Modal */}
       <Dialog open={isNewExpenseOpen} onOpenChange={closeModal}>
-        <DialogContent className="max-w-lg" data-testid="expense-modal">
+        <DialogContent className="max-w-full sm:max-w-lg max-h-[90vh] overflow-y-auto" data-testid="expense-modal">
           <DialogHeader>
             <DialogTitle>Nova Despesa</DialogTitle>
           </DialogHeader>
